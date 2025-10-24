@@ -1,0 +1,192 @@
+--indent size 4
+dx9 = dx9
+ 
+-- Console setup
+if _G.PlayerList_Init == nil then
+    _G.PlayerList_Init = true
+    _G.PlayerList_LastPrint = 0
+    _G.PlayerList_FrameCount = 0
+    _G.PlayerList_LastFrameTime = os.clock()
+    _G.PlayerList_FPS = 0
+    dx9.ClearConsole()
+    dx9.ShowConsole(true)
+    print("=== PLAYER LIST DISPLAY ===")
+    print("Refreshing every 5 seconds...")
+    print("============================")
+end
+ 
+-- Get game references
+local Datamodel = dx9.GetDatamodel()
+local Services = {
+    Players = dx9.FindFirstChild(Datamodel, "Players");
+    Workspace = dx9.FindFirstChild(Datamodel, "Workspace");
+    Teams = dx9.FindFirstChild(Datamodel, "Teams");
+}
+ 
+-- Get local player
+local Local_player = nil
+for _, player in pairs(dx9.GetChildren(Services.Players)) do
+    if dx9.FindFirstChild(player, "PlayerGui") then
+        Local_player = player
+        break
+    end
+end
+ 
+if not Local_player or Local_player == 0 then
+    Local_player = dx9.get_localplayer()
+end
+ 
+local player_name = Local_player and dx9.GetName(Local_player) or "Unknown"
+ 
+-- Calculate FPS
+_G.PlayerList_FrameCount = _G.PlayerList_FrameCount + 1
+local current_time = os.clock()
+local delta_time = current_time - _G.PlayerList_LastFrameTime
+ 
+if delta_time >= 1.0 then
+    _G.PlayerList_FPS = _G.PlayerList_FrameCount / delta_time
+    _G.PlayerList_FrameCount = 0
+    _G.PlayerList_LastFrameTime = current_time
+end
+ 
+-- Function to get distance to player
+local function get_distance_to_player(target_name)
+    if not Local_player or Local_player == 0 then return nil end
+ 
+    local my_character = dx9.FindFirstChild(Services.Workspace, player_name)
+    if not my_character or my_character == 0 then return nil end
+ 
+    local my_root = dx9.FindFirstChild(my_character, "HumanoidRootPart")
+    if not my_root or my_root == 0 then return nil end
+ 
+    local target_character = dx9.FindFirstChild(Services.Workspace, target_name)
+    if not target_character or target_character == 0 then return nil end
+ 
+    local target_root = dx9.FindFirstChild(target_character, "HumanoidRootPart")
+    if not target_root or target_root == 0 then return nil end
+ 
+    local my_pos = dx9.GetPosition(my_root)
+    local target_pos = dx9.GetPosition(target_root)
+ 
+    if not my_pos or not target_pos then return nil end
+ 
+    local distance = math.sqrt(
+        (my_pos.x - target_pos.x)^2 +
+        (my_pos.y - target_pos.y)^2 +
+        (my_pos.z - target_pos.z)^2
+    )
+ 
+    return math.floor(distance)
+end
+ 
+-- Function to get player health
+local function get_player_health(target_name)
+    local character = dx9.FindFirstChild(Services.Workspace, target_name)
+    if not character or character == 0 then return nil end
+ 
+    local humanoid = dx9.FindFirstChild(character, "Humanoid")
+    if not humanoid or humanoid == 0 then return nil end
+ 
+    local health = dx9.GetHealth(humanoid)
+    return health and math.floor(health) or nil
+end
+ 
+-- Function to get team name
+local function get_team_name(player)
+    -- Disabled - causing encoding issues
+    return nil
+end
+ 
+-- Print player list every 5 seconds
+if current_time - _G.PlayerList_LastPrint >= 1.5 then
+    _G.PlayerList_LastPrint = current_time
+ 
+    local success, error_msg = pcall(function()
+        dx9.ClearConsole()
+ 
+        print("================================================================")
+        print("              PLAYER LIST - " .. os.date("%H:%M:%S"))
+        print("================================================================")
+        print("  FPS: " .. math.floor(_G.PlayerList_FPS))
+        print("================================================================")
+ 
+        -- Get all players
+        local players_list = dx9.GetChildren(Services.Players)
+        local player_count = #players_list
+ 
+        print("  Total Players: " .. player_count)
+        print("================================================================")
+ 
+        -- Sort players (you first, then alphabetical)
+        local sorted_players = {}
+        local you_player = nil
+ 
+        for _, player in pairs(players_list) do
+            if player and player ~= 0 then
+                local name = dx9.GetName(player)
+                if name == player_name then
+                    you_player = {player = player, name = name}
+                else
+                    table.insert(sorted_players, {player = player, name = name})
+                end
+            end
+        end
+ 
+        -- Sort by name
+        table.sort(sorted_players, function(a, b)
+            return a.name < b.name
+        end)
+ 
+        -- Insert you at the top
+        if you_player then
+            table.insert(sorted_players, 1, you_player)
+        end
+ 
+        -- Print player list
+        for i, player_data in ipairs(sorted_players) do
+            local name = player_data.name
+            local player = player_data.player
+            local is_you = (name == player_name)
+ 
+            -- Get player info
+            local distance = get_distance_to_player(name)
+            local health = get_player_health(name)
+ 
+            -- Format name
+            local display_name = name
+            if is_you then
+                display_name = name .. " (YOU)"
+            end
+ 
+            -- Build info string
+            local info_parts = {}
+ 
+            if health then
+                table.insert(info_parts, "HP: " .. health)
+            end
+ 
+            if distance and not is_you then
+                table.insert(info_parts, "Distance: " .. distance .. " studs")
+            end
+ 
+            local info_string = table.concat(info_parts, " | ")
+ 
+            -- Print player entry
+            print(string.format(" %2d. %s", i, display_name))
+ 
+            if #info_string > 0 then
+                print("     " .. info_string)
+            else
+                print("     (Character not spawned)")
+            end
+ 
+            print("----------------------------------------------------------------")
+        end
+ 
+        print("================================================================")
+    end)
+ 
+    if not success then
+        print("[ERROR] " .. tostring(error_msg))
+    end
+end
